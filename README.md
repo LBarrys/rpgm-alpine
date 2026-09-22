@@ -16,8 +16,9 @@ apk add electron            # Alpine edge, testing repository
 ./install.sh --user         # or into ~/.local
 ```
 
-Optional: `unzip`, for games shipped as `package.nw`. `mkxp-z` for XP/VX/VX Ace — Alpine does not
-package it, so build it yourself. Uninstall with `./install.sh --uninstall`.
+Optional: `unzip`, for games shipped as `package.nw`. For XP/VX/VX Ace you need `mkxp-z`, which
+Alpine does not package — `./build-mkxp-z.sh` builds it from source and installs it alongside rpgm.
+Uninstall with `./install.sh --uninstall`.
 
 ## Use
 
