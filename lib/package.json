@@ -1,0 +1,1 @@
+{ "name": "rpgm", "desktopName": "rpgm.desktop", "main": "electron-main.js", "private": true }
