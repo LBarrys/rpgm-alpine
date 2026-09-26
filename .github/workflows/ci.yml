@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: shellcheck
-        run: shellcheck -s sh rpgm install.sh test/run.sh test/fixtures.sh build-mkxp-z.sh
+        run: shellcheck -s sh rpgm install.sh mkapk.sh test/run.sh test/fixtures.sh build-mkxp-z.sh
 
       - name: Ruby preload scripts parse
         run: for f in lib/rgss/*.rb; do ruby -c "$f" >/dev/null || exit 1; done
