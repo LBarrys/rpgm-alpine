@@ -21,9 +21,7 @@ Alpine does not package — `./build-mkxp-z.sh` builds it from source and instal
 Uninstall with `./install.sh --uninstall`.
 
 There is an `APKBUILD` for packaging it properly (`abuild -r`, once the release is tagged);
-`PREFIX` and `DESTDIR` are honoured by `install.sh` for that. Without abuild on hand,
-`./mkapk.sh` builds the same package straight from the checkout — it needs only python3,
-and the result is unsigned, so `apk add --allow-untrusted rpgm-0.1.0-r0.apk`.
+`PREFIX` and `DESTDIR` are honoured by `install.sh` for that.
 
 ## Use
 
