@@ -1,4 +1,3 @@
-// Exercises MV save/load, the NW.js shim, and how mod loaders resolve their folders.
 (function () {
   var r = {};
   var step = function (name, fn) { try { r[name] = fn(); } catch (e) { r[name] = 'ERR ' + e; } };
@@ -22,8 +21,6 @@
     step('config', function () { ConfigManager.bgmVolume = 40; ConfigManager.save(); ConfigManager.bgmVolume = 100; ConfigManager.load(); return ConfigManager.bgmVolume; });
     if (Utils.isNwjs()) {
       var fs = require('fs'), path = require('path'), gui = require('nw.gui'), win = gui.Window.get();
-      // How Karryn's Prison' mod manager finds www/mods: dirname(mainModule.filename), and
-      // when that is unavailable it falls back to the process working directory.
       step('cwd', function () { return process.cwd(); });
       step('mainModule', function () { return process.mainModule.filename; });
       step('modsViaMainModule', function () { return path.resolve(path.dirname(process.mainModule.filename), 'mods'); });

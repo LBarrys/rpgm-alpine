@@ -1,23 +1,4 @@
 #!/bin/sh
-# rpgm's test suite.
-#
-#   ./test/run.sh              everything whose prerequisites are present
-#   ./test/run.sh static       only the shell tests (no electron, no network)
-#   ./test/run.sh unit         only the Node unit tests for lib/
-#   ./test/run.sh integration  only the real-MV-game tests (see below)
-#
-# The static and unit tiers need nothing but a shell, awk and node, and are what CI
-# runs. The integration tier plays an actual RPG Maker MV game under Electron to
-# check the NW.js shim end to end, so it needs:
-#
-#   electron           apk add electron
-#   python3
-#   a copy of RPG Maker MV's corescript, in $RPGM_CORESCRIPT
-#     git clone https://github.com/rpgtkoolmv/corescript
-#   a .ttf in $RPGM_TEST_FONT, which MV loads as its GameFont before it will boot
-#   a display (or xvfb-run ./test/run.sh)
-#
-# It is skipped, not failed, when any of those is missing.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -40,22 +21,19 @@ no() {
 }
 skipped() { skip=$((skip + 1)); printf '%sskip%s %s (%s)\n' "$ylw" "$off" "$1" "$2"; }
 
-# run DESC COMMAND...: capture a command's output (both streams) into $out, and set
-# $desc, which the has_line/lacks_line assertions below report under.
 run() {
 	desc=$1
 	shift
 	out=$("$@" 2>&1) || true
 }
 
-has_line() { # the captured output contains this substring
+has_line() {
 	if printf '%s\n' "$out" | grep -qF -- "$1"; then ok "$desc"; else no "$desc" "expected to find: $1"; fi
 }
-lacks_line() { # ... and this one is absent
+lacks_line() {
 	if printf '%s\n' "$out" | grep -qF -- "$1"; then no "$desc" "did not expect: $1"; else ok "$desc"; fi
 }
 
-# ---------------------------------------------------------------- static tier --
 static() {
 	echo "== static: detection and --info"
 	fx=$tmp/fx
@@ -98,8 +76,6 @@ static() {
 	desc='a valid mkxp.json is reported as valid'; has_line 'mkxp.json parses'
 	desc='a preload path that does not exist is reported'; has_line '/nonexistent/lib/rgss/all.rb'
 	desc='"enableReset": false is left alone'; lacks_line 'F12 resets the game'
-	# The config has a live "smoothScaling": 1 and a commented-out ": 4". Reading it
-	# with grep would see the 4 and report xBRZ; the tokeniser must not.
 	desc='a commented-out setting is not read as live'; lacks_line 'xBRZ is on'
 	desc='the live setting is'; has_line 'screen 1/0'
 
@@ -166,12 +142,9 @@ static() {
 	done
 }
 
-# ------------------------------------------------------------------ unit tier --
 unit() {
 	echo "== unit: lib/"
 	if ! command -v node >/dev/null 2>&1; then skipped 'node unit tests' 'node is not installed'; return 0; fi
-	# ci-test.js prints one "ok DESC" or "FAIL DESC" line per assertion; fold its
-	# tally into this script's so the final count covers everything.
 	ci=$(node test/ci-test.js 2>&1) || true
 	printf '%s\n' "$ci" | while IFS= read -r l; do
 		case $l in ok\ *) printf '%s  ok%s %s\n' "$grn" "$off" "${l#ok }" ;;
@@ -185,7 +158,6 @@ unit() {
 	done
 }
 
-# ----------------------------------------------------------- integration tier --
 integration() {
 	echo "== integration: a real MV game under Electron"
 	for need in electron python3; do
@@ -206,8 +178,6 @@ integration() {
 		python3 test/build_mv.py "$g" --corescript "$RPGM_CORESCRIPT" --font "$font" \
 			--plugin "test/$t.js" >/dev/null ||
 			{ no "$t: building the game"; continue; }
-		# Electron does not forward the page's console to the terminal unless asked;
-		# the test plugins report through it, so the suite needs it on.
 		out=$(ELECTRON_ENABLE_LOGGING=1 timeout 120 "$rpgm" "$g" 2>&1) || true
 		desc="$t ran to the end"
 		key=$(printf '%s' "$t" | tr '[:lower:]' '[:upper:]' | sed 's/TEST$//')

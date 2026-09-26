@@ -1,5 +1,4 @@
 #!/bin/sh
-# rpgm - run Windows RPG Maker MV/MZ games (and other NW.js games) natively on Alpine Linux.
 set -eu
 
 VERSION=0.1.0
@@ -8,7 +7,6 @@ here=$(dirname "$(readlink -f "$0")")/lib
 
 die() { printf 'rpgm: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
-# Print the first path under $game matching the case-insensitive pattern $1 (e.g. www/js/rpg_core.js).
 find_ci() { (cd "$game" && find . -maxdepth 3 -ipath "./$1" 2>/dev/null | head -n 1 | cut -c3-); }
 has() { [ -n "$(find_ci "$1")" ]; }
 
@@ -59,7 +57,7 @@ done
 [ $# -le 1 ] || die "expected one game path (see --help)"
 target=${1:-.}
 [ -e "$target" ] || die "no such file or directory: $target"
-[ -d "$target" ] || target=$(dirname "$target") # Game.exe -> its folder
+[ -d "$target" ] || target=$(dirname "$target")
 game=$(cd "$target" && pwd -P)
 
 if has www/js/rpg_core.js || has js/rpg_core.js; then engine='mv'
@@ -72,8 +70,6 @@ elif has 'data/*.r?data*'; then engine='rgss'
 else engine=''
 fi
 
-# Why a mod or plugin is not taking effect. RPG Maker loads only the plugins listed in
-# js/plugins.js; mod loaders find their own mods at run time and are not listed there.
 plugin_report() {
 	if [ -f "$game/www/js/plugins.js" ]; then www="$game/www"
 	elif [ -f "$game/js/plugins.js" ]; then www="$game"
@@ -129,9 +125,6 @@ plugin_report() {
 	fi
 }
 
-# A folder rpgm cannot run. Saying only "not recognized" is useless when the answer is
-# usually specific: another engine with its own native player, a packer that has to be
-# undone first, or the wrong folder. Prints one paragraph and nothing else.
 unknown_report() {
 	if has 'data/*.wolf' || has 'data/basicdata/*'; then
 		echo "         This is a Wolf RPG Editor game, not RPG Maker. There is no native"
@@ -162,8 +155,6 @@ unknown_report() {
 	fi
 }
 
-# mkxp-z keeps its bundled compatibility wrappers next to itself; preload paths are
-# resolved from the game's folder, so they have to be absolute to be usable here.
 mkxp_preload_dir() {
 	m=$(command -v mkxp-z 2>/dev/null) || return 1
 	m=$(readlink -f "$m")
@@ -175,23 +166,17 @@ mkxp_preload_dir() {
 	return 1
 }
 
-# The live value of a top-level mkxp.json key, or nothing if it is absent or commented out.
 conf_get() {
 	printf '%s\n' "$conf_keys" | awk -F'\t' -v k="$1" '$1 == k {print $2; found = 1}
 		END {exit !found}'
 }
 
-# Normalise a JSON5 number so it can be compared as a string: 1, 1.0 and 1.00 are the
-# same number and all three are legal, so a plain [ "$x" = 1 ] misses two of them.
 num() {
 	n=${1:-0}
 	case $n in *.*) n=$(printf '%s' "$n" | sed -e 's/0*$//' -e 's/\.$//') ;; esac
 	printf '%s' "${n:-0}"
 }
 
-# Graphics and performance settings that quietly do nothing, or quietly cost something,
-# when they are combined the wrong way. Every rule here is upstream's own: see the
-# comments in mkxp-z's bundled mkxp.json.
 graphics_report() {
 	up=$(conf_get smoothScaling || echo 0)
 	down=$(conf_get smoothScalingDown || echo 0)
@@ -202,19 +187,15 @@ graphics_report() {
 	*) echo "scaling: screen $up/$down, bitmaps $bmp/$bmpdown (0 nearest, 1 bilinear, 2 bicubic, 3 lanczos3, 4 xBRZ)" ;;
 	esac
 
-	# "Force-disabled when smoothScaling or smoothScalingDown isn't Nearest-Neighbor
-	# or Bilinear" - so anything past bilinear silently costs the blitting fast path.
 	case ${up:-0} in 2 | 3 | 4) blit=1 ;; *) blit= ;; esac
 	case ${down:-0} in 2 | 3 | 4) blit=1 ;; esac
 	[ -z "$blit" ] || echo "         this disables framebuffer blitting, which is the faster path on Linux"
 
-	# xBRZ needs to be told how far it is scaling.
 	if [ "${up:-0}" = 4 ] && [ "$(num "$(conf_get xbrzScalingFactor || echo 1)")" = 1 ]; then
 		echo "         xBRZ is on but \"xbrzScalingFactor\" is 1: set it to at least your"
 		echo "         window height divided by the game's, or it has nothing to work with"
 	fi
 
-	# "requires smoothScalingDown: 1 or bitmapSmoothScalingDown: 1"
 	if [ "$(conf_get smoothScalingMipmaps || echo false)" = true ] &&
 		[ "${down:-0}" != 1 ] && [ "${bmpdown:-0}" != 1 ]; then
 		echo "         \"smoothScalingMipmaps\" does nothing unless \"smoothScalingDown\" or"
@@ -237,9 +218,6 @@ graphics_report() {
 	fi
 }
 
-# What goes wrong with RPG Maker XP/VX/VX Ace games under mkxp-z, and why none of it
-# says so on screen: a mistyped mkxp.json is discarded whole, Windows DLLs cannot load,
-# and hand-written parsers in the game's own scripts choke on Windows line endings.
 rgss_report() {
 	case $(find_ci 'data/scripts.r*data*') in
 	*.rxdata) echo "rgss:    XP (RGSS1)" ;;
@@ -264,19 +242,13 @@ rgss_report() {
 		else
 			echo "config:  $conf parses"
 		fi
-		# Read it properly: most of a typical mkxp.json is commented out, and grep
-		# cannot tell a live setting from one someone parked behind a //.
 		conf_keys=$(awk -f "$here/json5get.awk" "$game/$conf" 2>/dev/null || true)
-		# A preload path that does not resolve only shows up as a message box at startup.
 		miss=$(printf '%s\n' "$conf_keys" | awk -F'\t' '$1 == "preloadScript" {print $2}' |
 			while IFS= read -r p; do
 				[ -n "$p" ] || continue
 				case $p in /*) [ -f "$p" ] || printf '%s\n' "$p" ;; *) [ -f "$game/$p" ] || printf '%s\n' "$p" ;; esac
 			done)
 		[ -z "$miss" ] || { echo "         these .rb paths in it do not exist:"; printf '%s\n' "$miss" | sed 's/^/           /'; suggest=1; }
-		# F12 resets the game, and few survive it: anything a global still points at was
-		# disposed by the reset. Windows builds ship a DLL that eats the key; it cannot
-		# load here. mkxp-z defaults this on, so silence means on.
 		if [ -z "$err" ] && [ "$(conf_get enableReset || echo true)" != false ]; then
 			echo "         \"enableReset\" is not false, so F12 resets the game. Most crash on"
 			echo "         the reset rather than restart; add \"enableReset\": false."
@@ -291,9 +263,6 @@ rgss_report() {
 		echo "         Games normally carry on without them, minus whatever they did."
 		suggest=1
 	fi
-	# Without win32_wrap.rb, Win32API.new raises instead of returning a no-op, which kills
-	# the whole script it sits in. Games that call it while defining a class or module lose
-	# that class, and fail much later with "uninitialized constant" - or just quit at boot.
 	if [ -z "$conf" ] || ! printf '%s\n' "$conf_keys" | grep -q 'win32_wrap\|rgss/all\.rb'; then
 		if [ -n "$(cd "$game" && find . -maxdepth 4 -name '*.rb' 2>/dev/null | head -400 |
 			while IFS= read -r f; do
@@ -318,17 +287,12 @@ rgss_report() {
 		echo "         game in Fonts/, or map its name in mkxp.json with \"fontSub\"."
 	fi
 
-	# Hand-written parsers in these games split on "\n" and test the result for empty.
-	# A "\r" left on the end makes a blank line not blank and a key not match: the JSON
-	# decoder most of them ship returns nil, and the translation loader collapses a whole
-	# file into one unusable entry, which shows up as raw keys on screen.
 	crlf=$(cd "$game" && find . \( -iname '*.json' -o -iname '*.txt' \) 2>/dev/null | head -200 |
 		while IFS= read -r f; do
 			[ "$(head -c 4096 "$f" | tr -dc '\r' | wc -c | tr -d ' ')" = 0 ] || echo x
 		done | wc -l | tr -d ' ')
 	if [ "$crlf" != 0 ]; then
 		echo "data:    $crlf of the first 200 .json/.txt files have Windows (CRLF) line endings"
-		# The whitespace list of the JSON decoder that ships with many RGSS games.
 		dec=$(cd "$game" && find . -name '*.rb' 2>/dev/null | head -2000 |
 			while IFS= read -r f; do
 				grep -qF "', \"\\n\", \"\\t\"" "$f" 2>/dev/null && { printf '%s\n' "${f#./}"; break; }
@@ -350,9 +314,6 @@ rgss_report() {
 	fi
 }
 
-# Write the game an mkxp.json that loads the shims. Only when there is none: merging
-# into an existing one would mean parsing JSON5 here, and getting that wrong silently
-# throws away every setting the game came with.
 rgss_setup() {
 	conf=$(find_ci 'mkxp.json')
 	if [ -n "$conf" ]; then
@@ -453,9 +414,6 @@ if [ -n "$info" ]; then
 		fi ;;
 	esac
 	case $engine in mv | mz) plugin_report ;; rgss) rgss_report ;; esac
-	# Files whose names differ only in case: on Windows a mod would have replaced the original,
-	# but here both exist and the game keeps loading the original one. mkxp-z looks its own
-	# files up case-insensitively, so this only affects the NW.js-style engines.
 	case $engine in mv | mz | nwjs*) ;; *) exit 0 ;; esac
 	dups=$(cd "$game" && find . -type f | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
 	if [ -n "$dups" ]; then
@@ -467,28 +425,24 @@ if [ -n "$info" ]; then
 	exit 0
 fi
 
-# Extra flags for Chromium/Electron. Their automatic Wayland detection needs
-# XDG_SESSION_TYPE=wayland, which many sessions (e.g. niri started from a tty) don't set,
-# so choose the platform here: Wayland when WAYLAND_DISPLAY is set, else X11.
 flags=
 case ${RPGM_PLATFORM:-} in
 wayland | x11) flags="--ozone-platform=$RPGM_PLATFORM" ;;
 '') if [ -n "${WAYLAND_DISPLAY:-}" ]; then flags=--ozone-platform=wayland; else flags=--ozone-platform=x11; fi ;;
 *) die "RPGM_PLATFORM must be wayland or x11" ;;
 esac
-[ "$(id -u)" != 0 ] || flags="$flags --no-sandbox" # Chromium refuses to run as root otherwise
+[ "$(id -u)" != 0 ] || flags="$flags --no-sandbox"
 
 run_nwjs() {
 	have electron || die "electron is not installed (apk add electron, from Alpine edge's testing repository)"
 	export RPGM_GAME="$1" RPGM_TEST="$test"
-	# shellcheck disable=SC2086 # $flags holds separate words on purpose
-	exec electron $flags "$here" # lib/package.json: app_id "rpgm", main electron-main.js
+	# shellcheck disable=SC2086
+	exec electron $flags "$here"
 }
 
 case $engine in
 mv | mz | nwjs) run_nwjs "$game" ;;
-nwjs-zip) # package.nw is a zip of the game. Unpack it (again when it changes) next to
-	# the per-game data, never deleting: the game may keep its saves in that folder.
+nwjs-zip)
 	have unzip || die "unzip is required (apk add unzip)"
 	zip="$game/$(find_ci package.nw)"
 	dir="${XDG_DATA_HOME:-$HOME/.local/share}/rpgm/unpacked/$(printf %s "$game" | md5sum | cut -c1-12)"
@@ -507,11 +461,8 @@ electron-app)
 	exec electron $flags "$app" ;;
 rgss)
 	have mkxp-z || die "RPG Maker XP/VX/VX Ace game; needs mkxp-z (https://github.com/mkxp-z/mkxp-z)"
-	# mkxp-z otherwise switches to its own folder at startup; SRCDIR points it at the game.
-	# Its playtest mode is the bare argument "test" (F9 debug menu, as in the editor).
 	cd "$game" || die "cannot enter $game"
 	export SRCDIR="$game"
-	# lib/rgss/all.rb loads mkxp-z's own wrappers from here.
 	pre=$(mkxp_preload_dir || true)
 	[ -z "$pre" ] || export RPGM_MKXPZ_PRELOAD="$pre"
 	export RPGM_SHIM_DIR="$here/rgss"

@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""Build a minimal but genuinely playable RPG Maker MV game, for the integration tests.
-
-The static tests only need folders that look like games. These tests need one that
-actually boots, because what they are checking is the NW.js compatibility layer:
-saves, the mods folder, the clipboard, window handling. So the game is assembled
-from a real corescript checkout, with one test plugin dropped in.
-
-    python3 test/build_mv.py OUTDIR --corescript DIR [--font FILE] [--plugin FILE]
-
---corescript is a checkout of https://github.com/rpgtkoolmv/corescript.
---font is any .ttf; MV blocks on loading GameFont before it will boot, so it needs
-one, but which one does not matter.
-"""
-
 import argparse
 import json
 import os
@@ -28,7 +14,6 @@ DATA_FILES = ['actors', 'Classes', 'Skills', 'Items', 'Weapons', 'Armors', 'Enem
 
 
 def png(path, w=32, h=32):
-    """A valid PNG of a flat colour. MV refuses to finish loading without these."""
     raw = b''.join(b'\0' + b'\x80\x40\x20\xff' * w for _ in range(h))
 
     def chunk(tag, data):
@@ -71,8 +56,6 @@ def main():
     for d in ['js/libs', 'js/plugins', 'js/loaders', 'fonts', 'Data', 'img/System', 'icon', 'mods']:
         os.makedirs(os.path.join(www, d), exist_ok=True)
 
-    # The corescript ships as one file per class plus a JSON listing the order they
-    # concatenate in; modules.json names the bundles.
     with open(os.path.join(cs, 'modules.json')) as f:
         modules = json.load(f)
     for part in modules:
@@ -90,11 +73,8 @@ def main():
     shutil.copy(os.path.join(cs, 'template', 'fonts', 'gamefont.css'), os.path.join(www, 'fonts'))
     shutil.copy(font, os.path.join(www, 'fonts', 'mplus-1m-regular.ttf'))
 
-    # Asked for as TEST.WASM: the case-insensitive layer has to find it, and it has to
-    # arrive with a MIME type WebAssembly will accept.
     with open(os.path.join(www, 'js', 'libs', 'test.wasm'), 'wb') as f:
         f.write(b'\0asm\1\0\0\0')
-    # A mod in the folder a mod loader would look in, with recognisable contents.
     with open(os.path.join(www, 'mods', 'DemoMod.js'), 'w') as f:
         f.write('MOD-OK\n')
 
@@ -108,7 +88,7 @@ def main():
     for n in SYSTEM_IMAGES:
         png(os.path.join(www, 'img', 'System', n + '.png'))
     png(os.path.join(www, 'img', 'System', 'Window.png'), 192, 192)
-    png(os.path.join(www, 'img', 'System', 'Loading.png'))  # drawn while loading
+    png(os.path.join(www, 'img', 'System', 'Loading.png'))
     png(os.path.join(www, 'icon', 'icon.png'))
 
     for n in DATA_FILES:
@@ -133,8 +113,6 @@ def main():
         'testBattlers': [], 'testTroopId': 0,
         'hasEncryptedImages': False, 'hasEncryptedAudio': False,
     }
-    # Written in upper case on purpose: MV asks for data/System.json, so finding it
-    # at all is the case-insensitive layer doing its job.
     with open(os.path.join(www, 'Data', 'SYSTEM.JSON'), 'w') as f:
         json.dump(system, f)
 

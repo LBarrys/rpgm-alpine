@@ -1,21 +1,3 @@
-# msgbox_echo.rb - copy every message box to the console.
-#
-# An mkxp-z preload script. Put it FIRST, so it is in place before anything can
-# fail:
-#   "preloadScript": ["/usr/local/lib/rpgm/lib/rgss/msgbox_echo.rb", ...]
-#
-# RGSS games report errors with `msgbox`, and mkxp-z's `msgbox` only opens a
-# window - nothing is written to the console. Games that wrap their script
-# loading in `rescue => ex; msgbox ex.message + ex.backtrace...` therefore fail
-# completely silently as far as a terminal or a log file is concerned: the game
-# quietly skips the broken script and dies somewhere else later, and the log
-# just stops mid-boot with no hint of why.
-#
-# Everything goes to stdout, where the game's own `p` output goes, so a plain
-# `rpgm > log` catches it without having to remember to redirect stderr.
-#
-# Public domain (CC0).
-
 module Kernel
   def msgbox_echo_say(label, lines)
     $stdout.puts "--- #{label} ---"
@@ -46,9 +28,6 @@ module Kernel
   end
 end
 
-# Whatever ends the process, say so and say why. A game that stops with no error
-# at all looks exactly like one whose error went to a window nobody captured;
-# this tells the two apart.
 at_exit do
   ex = $!
   if ex.nil?

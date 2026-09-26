@@ -34,7 +34,6 @@ rpgm --setup ~/Games/SomeGame       # XP/VX/VX Ace: write an mkxp.json loading t
 rpgm --version                      # quote this in bug reports; --info prints it too
 ```
 
-The installed desktop entry registers rpgm as an "Open with" handler for `.exe` files.
 Pointed at a folder it cannot run, rpgm says which engine it found instead and what does
 run it — Wolf RPG, KiriKiri and Ren'Py games, RPG Maker 2000/2003, and games still packed
 inside their `.exe` all get their own answer rather than "not recognized".

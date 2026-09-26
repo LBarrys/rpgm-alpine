@@ -1,14 +1,3 @@
-# json5check.awk - report the first syntax error in an mkxp.json, or print nothing.
-#
-# mkxp-z parses mkxp.json as JSON5 (comments and trailing commas are allowed) and,
-# when the parse fails, writes one line to its log and then ignores the entire file:
-# every setting in it silently goes back to its default. A missing comma between two
-# array entries is enough, and the game simply behaves as if the file were not there.
-#
-# This is a syntax check, not a schema check: it verifies quoting, brackets and
-# separators, and says which line went wrong. Output is "LINE: MESSAGE" on the first
-# problem found, nothing at all when the file parses.
-
 { buf = buf $0 "\n" }
 
 function fail(msg) { print line ": " msg; exit 1 }
@@ -18,7 +7,7 @@ END {
 	i = 1
 	line = 1
 	depth = 0
-	prev = "start" # start, value, open, close, colon, comma
+	prev = "start"
 
 	while (i <= n) {
 		c = substr(buf, i, 1)
@@ -26,7 +15,6 @@ END {
 		if (c == "\n") { line++; i++; continue }
 		if (c == " " || c == "\t" || c == "\r") { i++; continue }
 
-		# comments
 		if (c == "/") {
 			d = substr(buf, i + 1, 1)
 			if (d == "/") { while (i <= n && substr(buf, i, 1) != "\n") i++; continue }
@@ -40,7 +28,6 @@ END {
 			fail("stray '/' (a comment starts with // or /*)")
 		}
 
-		# strings: JSON5 allows single quotes and backslash-escaped line breaks
 		if (c == "\"" || c == "'") {
 			if (prev == "value" || prev == "close") fail("missing ',' before this")
 			start = line
@@ -92,7 +79,6 @@ END {
 			continue
 		}
 
-		# numbers, true/false/null, and JSON5's unquoted keys
 		if (prev == "value" || prev == "close") fail("missing ',' before this")
 		while (i <= n && index(" \t\r\n{}[]:,/", substr(buf, i, 1)) == 0) i++
 		prev = "value"

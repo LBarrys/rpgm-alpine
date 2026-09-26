@@ -1,27 +1,9 @@
-# ini_wrap.rb - make kernel32's .ini functions work.
-#
-# An mkxp-z preload script. It must come AFTER mkxp-z's own win32_wrap.rb, and
-# both need full paths, because mkxp-z resolves them from the game's folder:
-#   "preloadScript": ["/usr/local/lib/mkxp-z/scripts/preload/win32_wrap.rb",
-#                     "/usr/local/lib/rpgm/lib/rgss/ini_wrap.rb"]
-# `rpgm --info` prints this list with the paths this machine actually has.
-#
-# win32_wrap.rb turns every unimplemented Win32API call into a no-op returning 0.
-# For kernel32's .ini ("private profile") functions that is actively wrong: a game
-# asking Game.ini for its saved BGM volume gets 0 back and plays silently, instead
-# of the default it passed in. This implements those four calls against the real file.
-#
-# Public domain (CC0).
-
 module Win32API_Impl
   module Kernel32
-    # Windows .ini files are ANSI/Shift-JIS; read as binary and only touch ASCII.
     def self.read(path)
       File.open(path, 'rb') { |f| f.read } rescue nil
     end
 
-    # Value of [section] key, or nil. Section and key match case-insensitively,
-    # as the Windows API does.
     def self.lookup(path, section, key)
       data = read(path.to_s)
       return nil unless data
@@ -41,7 +23,6 @@ module Win32API_Impl
       nil
     end
 
-    # Rewrite [section] key = value, creating either if needed. Returns true on success.
     def self.store(path, section, key, value)
       path = path.to_s
       data = read(path) || ''
@@ -68,11 +49,11 @@ module Win32API_Impl
         out << line
       end
       unless done
-        if section_end                      # section exists: append inside it
+        if section_end
           out.insert(section_end, "#{key}=#{value}")
-        elsif current == want_section       # section is the last one in the file
+        elsif current == want_section
           out << "#{key}=#{value}"
-        else                                # no such section yet
+        else
           out << '' unless out.empty? || out.last.to_s.strip.empty?
           out << "[#{section}]"
           out << "#{key}=#{value}"
@@ -84,7 +65,6 @@ module Win32API_Impl
       false
     end
 
-    # GetPrivateProfileInt(section, key, default, file) -> Integer
     class GetPrivateProfileInt
       def call(args)
         section, key, default, file = args
@@ -94,7 +74,6 @@ module Win32API_Impl
       end
     end
 
-    # GetPrivateProfileString(section, key, default, buffer, size, file) -> length
     class GetPrivateProfileStringA
       def call(args)
         section, key, default, buffer, size, file = args
@@ -109,7 +88,6 @@ module Win32API_Impl
       end
     end
 
-    # WritePrivateProfileString(section, key, value, file) -> 1 on success, 0 on failure
     class WritePrivateProfileStringA
       def call(args)
         section, key, value, file = args
@@ -117,7 +95,6 @@ module Win32API_Impl
       end
     end
 
-    # Games call these with or without the trailing "A".
     GetPrivateProfileString = GetPrivateProfileStringA
     WritePrivateProfileString = WritePrivateProfileStringA
   end

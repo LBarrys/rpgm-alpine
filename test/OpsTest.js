@@ -1,4 +1,3 @@
-// Exercises every nw.* API rpgm shims, then reports what came back.
 (function () {
   Scene_Boot.prototype.start = function () {
     Scene_Base.prototype.start.call(this);

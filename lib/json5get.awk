@@ -1,16 +1,5 @@
-# json5get.awk - print the top-level keys of an mkxp.json as "key<TAB>value" lines.
-#
-# An array becomes one line per element, all under the same key; an object value is
-# reported as "key<TAB>{}" and its contents skipped, since nothing here needs them.
-#
-# Grepping the file directly would be shorter and wrong: mkxp.json is JSON5, so most
-# of a typical one is commented out, and a commented "smoothScaling" reads exactly
-# like a live one to grep. Tokenising is the only way to tell them apart.
-
 { buf = buf $0 "\n" }
 
-# A value belongs to the current key when it sits at the top level, or inside the
-# array that key opened.
 function take(v) {
 	if (!want) return 0
 	if (depth == 1 || (arrdepth && depth == arrdepth)) return 1
@@ -45,7 +34,7 @@ END {
 			continue
 		}
 
-		if (c == "\"" || c == "'") { # quoted string
+		if (c == "\"" || c == "'") {
 			str = ""
 			i++
 			while (i <= n) {
@@ -86,7 +75,6 @@ END {
 		if (c == ":") { want = 1; i++; continue }
 		if (c == ",") { i++; continue }
 
-		# a bare word: number, true, false, null, or an unquoted key
 		word = ""
 		while (i <= n && index(" \t\r\n{}[]:,/'\"", substr(buf, i, 1)) == 0) {
 			word = word substr(buf, i, 1)

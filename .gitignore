@@ -1,4 +1,3 @@
-# abuild leaves these beside the APKBUILD
 pkg/
 src/
 *.apk
