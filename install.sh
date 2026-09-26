@@ -43,6 +43,9 @@ if [ -z "$destdir" ] && command -v update-desktop-database >/dev/null 2>&1; then
 fi
 
 echo "Installed rpgm to $prefix."
+# With DESTDIR set this is a package being staged, not an installation on this
+# machine: what is on this machine's PATH says nothing about the target's.
+[ -z "$destdir" ] || exit 0
 if ! command -v electron >/dev/null 2>&1; then
 	echo "No runtime found yet: apk add electron (Alpine edge, testing repository)"
 fi

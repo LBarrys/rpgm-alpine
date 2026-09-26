@@ -2,6 +2,8 @@
 # rpgm - run Windows RPG Maker MV/MZ games (and other NW.js games) natively on Alpine Linux.
 set -eu
 
+VERSION=0.1.0
+
 here=$(dirname "$(readlink -f "$0")")/lib
 
 die() { printf 'rpgm: %s\n' "$*" >&2; exit 1; }
@@ -23,10 +25,14 @@ Options:
   -s, --setup          XP/VX/VX Ace only: write the game an mkxp.json that loads
                        rpgm's compatibility shims
   -h, --help           show this help
+  -V, --version        show the version
 
 Environment:
   RPGM_PLATFORM        wayland or x11 (default: wayland if WAYLAND_DISPLAY is set)
   RPGM_RGSS_SKIP       shims to leave out, e.g. "user32_wrap textmode"
+  RPGM_MKXPZ_PRELOAD   mkxp-z's scripts/preload, when it is not next to the mkxp-z
+                       command (that is where rpgm looks for win32_wrap.rb)
+  RPGM_SHIM_DIR        rpgm's own lib/rgss, for a copy kept somewhere else
 
 Runtime:
   apk add electron          Alpine edge, testing repository
@@ -44,6 +50,7 @@ while [ $# -gt 0 ]; do
 	-i | --info) info=1; shift ;;
 	-s | --setup) setup=1; shift ;;
 	-h | --help) usage; exit 0 ;;
+	-V | --version) echo "rpgm $VERSION"; exit 0 ;;
 	--) shift; break ;;
 	-*) die "unknown option $1 (see --help)" ;;
 	*) break ;;
@@ -122,6 +129,39 @@ plugin_report() {
 	fi
 }
 
+# A folder rpgm cannot run. Saying only "not recognized" is useless when the answer is
+# usually specific: another engine with its own native player, a packer that has to be
+# undone first, or the wrong folder. Prints one paragraph and nothing else.
+unknown_report() {
+	if has 'data/*.wolf' || has 'data/basicdata/*'; then
+		echo "         This is a Wolf RPG Editor game, not RPG Maker. There is no native"
+		echo "         player for it; it runs under Wine."
+	elif has 'rpg_rt.ldb' || has 'rpg_rt.lmt' || has 'rpg_rt.exe'; then
+		echo "         This is RPG Maker 2000/2003. Those run natively under easyrpg-player,"
+		echo "         which rpgm does not wrap because it needs no help: apk add easyrpg-player,"
+		echo "         then run easyrpg-player in this folder."
+	elif has '*.xp3' || has 'data.xp3'; then
+		echo "         This is a KiriKiri/KAG game (.xp3 archives), not RPG Maker. It runs"
+		echo "         under Wine."
+	elif has 'game/*.rpa' || has 'renpy/*'; then
+		echo "         This is a Ren'Py game. Ren'Py ships native Linux builds - look for a"
+		echo "         .sh launcher here, or get the Linux release instead of the Windows one."
+	elif has '*.pck'; then
+		echo "         This looks like a Godot game. apk add godot (Alpine edge, testing) and"
+		echo "         open the .pck with it; rpgm does not wrap Godot because it needs no help."
+	elif [ -n "$(cd "$game" && find . -maxdepth 1 -iname '*.exe' 2>/dev/null | head -n 1)" ]; then
+		echo "         There is a .exe here but none of the data folders any engine rpgm knows"
+		echo "         would put beside it. Most often the game is packed inside the .exe with"
+		echo "         Enigma Virtual Box; unpack it first (https://github.com/mos9527/evbunpack)"
+		echo "         and point rpgm at what comes out."
+	elif [ -z "$(cd "$game" && find . -maxdepth 1 -mindepth 1 2>/dev/null | head -n 1)" ]; then
+		echo "         The folder is empty."
+	else
+		echo "         Nothing here looks like a game folder: no www/, js/, Data/, package.json"
+		echo "         or .exe. If the game is in a subfolder, point rpgm at that instead."
+	fi
+}
+
 # mkxp-z keeps its bundled compatibility wrappers next to itself; preload paths are
 # resolved from the game's folder, so they have to be absolute to be usable here.
 mkxp_preload_dir() {
@@ -139,6 +179,14 @@ mkxp_preload_dir() {
 conf_get() {
 	printf '%s\n' "$conf_keys" | awk -F'\t' -v k="$1" '$1 == k {print $2; found = 1}
 		END {exit !found}'
+}
+
+# Normalise a JSON5 number so it can be compared as a string: 1, 1.0 and 1.00 are the
+# same number and all three are legal, so a plain [ "$x" = 1 ] misses two of them.
+num() {
+	n=${1:-0}
+	case $n in *.*) n=$(printf '%s' "$n" | sed -e 's/0*$//' -e 's/\.$//') ;; esac
+	printf '%s' "${n:-0}"
 }
 
 # Graphics and performance settings that quietly do nothing, or quietly cost something,
@@ -161,7 +209,7 @@ graphics_report() {
 	[ -z "$blit" ] || echo "         this disables framebuffer blitting, which is the faster path on Linux"
 
 	# xBRZ needs to be told how far it is scaling.
-	if [ "${up:-0}" = 4 ] && [ "$(conf_get xbrzScalingFactor || echo 1)" = "1" ]; then
+	if [ "${up:-0}" = 4 ] && [ "$(num "$(conf_get xbrzScalingFactor || echo 1)")" = 1 ]; then
 		echo "         xBRZ is on but \"xbrzScalingFactor\" is 1: set it to at least your"
 		echo "         window height divided by the game's, or it has nothing to work with"
 	fi
@@ -174,13 +222,12 @@ graphics_report() {
 	fi
 
 	if [ "$(conf_get enableHires || echo false)" = true ]; then
-		tex=$(conf_get textureScalingFactor || echo 1)
-		fb=$(conf_get framebufferScalingFactor || echo 1)
-		atlas=$(conf_get atlasScalingFactor || echo 1)
+		tex=$(num "$(conf_get textureScalingFactor || echo 1)")
+		fb=$(num "$(conf_get framebufferScalingFactor || echo 1)")
+		atlas=$(num "$(conf_get atlasScalingFactor || echo 1)")
 		echo "hires:   on, scaling factors texture $tex, framebuffer $fb, atlas $atlas"
-		case "$tex$fb$atlas" in
-		111 | *1.01.01.0*) echo "         all three are 1, so the Hires/ replacements will not be used" ;;
-		esac
+		[ "$tex$fb$atlas" != 111 ] ||
+			echo "         all three are 1, so the Hires/ replacements will not be used"
 		[ -d "$game/Hires" ] || echo "         but there is no Hires/ folder next to the game to read from"
 	fi
 
@@ -390,8 +437,10 @@ if [ -n "$setup" ]; then
 fi
 
 if [ -n "$info" ]; then
+	echo "rpgm:    $VERSION"
 	echo "game:    $game"
 	echo "engine:  ${engine:-not recognized}"
+	[ -n "$engine" ] || { unknown_report; exit 0; }
 	core=$(find_ci www/js/rpg_core.js)
 	[ -n "$core" ] || core=$(find_ci js/rpg_core.js)
 	[ -n "$core" ] || core=$(find_ci js/rmmz_core.js)
@@ -471,5 +520,8 @@ rgss)
 	fi
 	[ -z "$test" ] || exec mkxp-z test
 	exec mkxp-z ;;
-*) die "no supported game found in $game" ;;
+*)
+	printf 'rpgm: no supported game found in %s\n' "$game" >&2
+	unknown_report >&2
+	exit 1 ;;
 esac

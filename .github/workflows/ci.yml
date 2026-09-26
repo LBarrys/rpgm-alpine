@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # rpgm only ever runs on Alpine, so test it there: busybox ash and GNU bash
+    # disagree often enough that passing on Ubuntu would prove little.
+    runs-on: ubuntu-latest
+    container: alpine:edge
+    steps:
+      - name: Install tools
+        run: apk add --no-cache git nodejs ruby shellcheck
+
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: shellcheck -s sh rpgm install.sh test/run.sh test/fixtures.sh build-mkxp-z.sh
+
+      - name: Ruby preload scripts parse
+        run: for f in lib/rgss/*.rb; do ruby -c "$f" >/dev/null || exit 1; done
+
+      # Runs the static and unit tiers; the integration tier skips itself here,
+      # since it needs Electron, a corescript checkout and a display.
+      - name: Test suite
+        run: ./test/run.sh
+
+      # An installed copy has to find lib/ through the symlink in bin/, which is a
+      # different path than the one the tests above exercise.
+      - name: Install and uninstall cleanly
+        run: |
+          ./install.sh --user
+          ~/.local/bin/rpgm --version
+          ./test/fixtures.sh /tmp/fx
+          ~/.local/bin/rpgm --info /tmp/fx/mv | grep -q 'engine:  mv'
+          ~/.local/bin/rpgm --setup /tmp/fx/rgss-raw | grep -q Wrote
+          ./install.sh --user --uninstall
+          test ! -e ~/.local/lib/rpgm
