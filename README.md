@@ -3,7 +3,7 @@
 Run Windows releases of RPG Maker games natively on Alpine Linux, without Wine.
 
 A minimal rewrite of [rpgmakermlinux-cicpoffs](https://github.com/bakustarver/rpgmakermlinux-cicpoffs)
-for musl: about 2,000 lines of shell, JavaScript and Ruby, no bundled binaries. MV and MZ games are
+for musl: about 2,300 lines of shell, JavaScript and Ruby, no bundled binaries. MV and MZ games are
 HTML5 apps packaged with NW.js; the original project downloads glibc builds of NW.js and ships
 glibc helper binaries, none of which run on Alpine. rpgm uses Alpine's own `electron` package
 instead, with a compatibility layer for the NW.js APIs games expect.
@@ -20,6 +20,9 @@ Optional: `unzip`, for games shipped as `package.nw`. For XP/VX/VX Ace you need 
 Alpine does not package — `./build-mkxp-z.sh` builds it from source and installs it alongside rpgm.
 Uninstall with `./install.sh --uninstall`.
 
+There is an `APKBUILD` for packaging it properly (`abuild -r`, once the release is tagged);
+`PREFIX` and `DESTDIR` are honoured by `install.sh` for that.
+
 ## Use
 
 ```sh
@@ -28,9 +31,13 @@ rpgm ~/Games/SomeGame               # or a folder, or its Game.exe
 rpgm --test ~/Games/SomeGame        # playtest mode: F9 debug menu, F12 devtools
 rpgm --info ~/Games/SomeGame        # what was detected, and what is silently broken
 rpgm --setup ~/Games/SomeGame       # XP/VX/VX Ace: write an mkxp.json loading the shims
+rpgm --version                      # quote this in bug reports; --info prints it too
 ```
 
 The installed desktop entry registers rpgm as an "Open with" handler for `.exe` files.
+Pointed at a folder it cannot run, rpgm says which engine it found instead and what does
+run it — Wolf RPG, KiriKiri and Ren'Py games, RPG Maker 2000/2003, and games still packed
+inside their `.exe` all get their own answer rather than "not recognized".
 
 | Engine | Handled by |
 |---|---|
@@ -171,6 +178,19 @@ Steam compatibility tool, game exporter, the Enigma/InstallShield/Tyrano/krkr un
 paid-version installer. Plugins can still be added by hand in `js/plugins/` and `js/plugins.js`.
 RPG Maker 2000/2003 and Godot are left to `easyrpg-player` and `godot` directly — rpgm added
 nothing to either.
+
+## Tests
+
+```sh
+./test/run.sh          # everything whose prerequisites are present
+```
+
+Three tiers: `static` asserts on what `--info` and `--setup` report about skeleton game
+folders, `unit` runs `lib/ci.js` under node, and `integration` plays a real MV game under
+Electron to exercise the NW.js shim from inside a running game. The first two need nothing
+but a shell, awk and node, and are what CI runs; the third skips itself unless Electron, a
+corescript checkout and a display are present. [`test/README.md`](test/README.md) has the
+details and how to add a case.
 
 ## Credits
 
